@@ -1,0 +1,34 @@
+{
+  "name": "icebug",
+  "version": "0.1.0",
+  "description": "Node.js bindings for icebug – high-performance graph analytics (NetworKit fork with Arrow CSR support)",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "scripts": {
+    "install":   "node-gyp rebuild",
+    "build":     "node-gyp rebuild",
+    "build:debug": "node-gyp rebuild --debug",
+    "clean":     "node-gyp clean",
+    "test":      "node test/basic.test.js"
+  },
+  "keywords": ["graph", "network", "analytics", "networkit", "icebug", "betweenness", "pagerank"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Ladybug-Memory/icebug-nodejs"
+  },
+  "dependencies": {
+    "node-addon-api": "^8.0.0"
+  },
+  "devDependencies": {
+    "node-gyp": "^10.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "binary": {
+    "module_name": "icebug",
+    "module_path": "./build/Release"
+  },
+  "gypfile": true
+}
