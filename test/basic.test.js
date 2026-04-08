@@ -308,7 +308,7 @@ test('weightedGraphFromEdges', () => {
 // ── I/O ──────────────────────────────────────────────────────────────────────
 console.log('\nI/O');
 
-const inputDir = path.join(__dirname, '..', '..', 'input');
+const inputDir = path.join(__dirname, '..', 'input');
 
 test('readMETIS (jazz.graph)', () => {
   const g = readMETIS(path.join(inputDir, 'jazz.graph'));
