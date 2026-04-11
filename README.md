@@ -7,9 +7,8 @@ This is a nodejs wrapper for the library.
 
 ## Installation
 
-Copy pre-built icebug to vendor/{include,lib}. This will be automated via CI in the future.
-
 ```
+npm install
 npm run test
 ```
 
