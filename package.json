@@ -5,9 +5,10 @@
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "scripts": {
-    "install":   "node-gyp rebuild",
-    "build":     "node-gyp rebuild",
-    "build:debug": "node-gyp rebuild --debug",
+    "download":  "bash scripts/download-icebug.sh",
+    "install":   "npm run download && node-gyp rebuild",
+    "build":     "npm run download && node-gyp rebuild",
+    "build:debug": "npm run download && node-gyp rebuild --debug",
     "clean":     "node-gyp clean",
     "test":      "node test/basic.test.js"
   },
