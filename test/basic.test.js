@@ -15,6 +15,8 @@ const {
   PageRank,
   DegreeCentrality,
   ConnectedComponents,
+  Louvain,
+  Leiden,
   readMETIS,
   readEdgeList,
   graphFromEdges,
@@ -322,6 +324,184 @@ test('readEdgeList', () => {
   const g = readEdgeList(path.join(inputDir, 'spaceseparated.edgelist'), ' ', 1, false, '#');
   assert.ok(g.numberOfNodes() > 0);
   console.log(`    spaceseparated.edgelist: ${g.numberOfNodes()} nodes, ${g.numberOfEdges()} edges`);
+});
+
+// ── Louvain ───────────────────────────────────────────────────────────────────
+console.log('\nLouvain (PLM)');
+
+// Helper: two tightly-connected cliques joined by a single bridge edge.
+// Nodes 0-3 form clique A; nodes 4-7 form clique B; edge 3-4 bridges them.
+function buildTwoCliquesGraph() {
+  const edges = [];
+  for (let i = 0; i < 4; i++)
+    for (let j = i + 1; j < 4; j++)
+      edges.push([i, j]);
+  for (let i = 4; i < 8; i++)
+    for (let j = i + 1; j < 8; j++)
+      edges.push([i, j]);
+  edges.push([3, 4]); // bridge
+  return graphFromEdges(8, edges);
+}
+
+test('Louvain: run and hasFinished', () => {
+  const g = buildTwoCliquesGraph();
+  const alg = new Louvain(g);
+  assert.ok(!alg.hasFinished());
+  alg.run();
+  assert.ok(alg.hasFinished());
+});
+
+test('Louvain: finds two communities on two-clique graph', () => {
+  const g = buildTwoCliquesGraph();
+  const alg = new Louvain(g);
+  alg.run();
+  assert.strictEqual(alg.numberOfCommunities(), 2);
+});
+
+test('Louvain: communityOfNode groups clique members together', () => {
+  const g = buildTwoCliquesGraph();
+  const alg = new Louvain(g);
+  alg.run();
+  // All nodes in clique A should share a community.
+  const cA = alg.communityOfNode(0);
+  assert.strictEqual(alg.communityOfNode(1), cA);
+  assert.strictEqual(alg.communityOfNode(2), cA);
+  assert.strictEqual(alg.communityOfNode(3), cA);
+  // All nodes in clique B should share a different community.
+  const cB = alg.communityOfNode(4);
+  assert.strictEqual(alg.communityOfNode(5), cB);
+  assert.strictEqual(alg.communityOfNode(6), cB);
+  assert.strictEqual(alg.communityOfNode(7), cB);
+  assert.notStrictEqual(cA, cB);
+});
+
+test('Louvain: getPartition returns membership Float64Array + count', () => {
+  const g = buildTwoCliquesGraph();
+  const alg = new Louvain(g);
+  alg.run();
+  const { membership, count } = alg.getPartition();
+  assert.ok(membership instanceof Float64Array);
+  assert.strictEqual(membership.length, 8);
+  assert.strictEqual(count, 2);
+  // membership must be consistent with communityOfNode()
+  for (let i = 0; i < 8; i++)
+    assert.strictEqual(membership[i], alg.communityOfNode(i));
+});
+
+test('Louvain: getCommunities returns array of arrays covering all nodes', () => {
+  const g = buildTwoCliquesGraph();
+  const alg = new Louvain(g);
+  alg.run();
+  const comms = alg.getCommunities();
+  assert.strictEqual(comms.length, 2);
+  const allNodes = comms.flat().sort((a, b) => a - b);
+  assert.deepStrictEqual(allNodes, [0, 1, 2, 3, 4, 5, 6, 7]);
+});
+
+test('Louvain: modularity is positive for two-clique graph', () => {
+  const g = buildTwoCliquesGraph();
+  const alg = new Louvain(g);
+  alg.run();
+  const Q = alg.modularity();
+  assert.ok(typeof Q === 'number' && Q > 0 && Q <= 1.0,
+    `Expected modularity in (0, 1], got ${Q}`);
+});
+
+test('Louvain: gamma resolution parameter', () => {
+  // gamma=0.01 → very low resolution, should collapse into fewer communities
+  const g = buildTwoCliquesGraph();
+  const alg = new Louvain(g, false, 0.01);
+  alg.run();
+  // With a very low gamma we expect 1 community (all merged)
+  assert.strictEqual(alg.numberOfCommunities(), 1);
+});
+
+test('Louvain: runs on jazz.graph', () => {
+  const g = readMETIS(path.join(inputDir, 'jazz.graph'));
+  const alg = new Louvain(g);
+  alg.run();
+  const n = alg.numberOfCommunities();
+  assert.ok(n > 0 && n < g.numberOfNodes(),
+    `Expected communities between 1 and n, got ${n}`);
+  const Q = alg.modularity();
+  assert.ok(Q > 0, `Expected positive modularity, got ${Q}`);
+  console.log(`    jazz.graph Louvain: ${n} communities, modularity=${Q.toFixed(4)}`);
+});
+
+// ── Leiden ────────────────────────────────────────────────────────────────────
+console.log('\nLeiden (ParallelLeiden)');
+
+test('Leiden: run and hasFinished', () => {
+  const g = buildTwoCliquesGraph();
+  const alg = new Leiden(g);
+  assert.ok(!alg.hasFinished());
+  alg.run();
+  assert.ok(alg.hasFinished());
+});
+
+test('Leiden: finds two communities on two-clique graph', () => {
+  const g = buildTwoCliquesGraph();
+  const alg = new Leiden(g);
+  alg.run();
+  assert.strictEqual(alg.numberOfCommunities(), 2);
+});
+
+test('Leiden: communityOfNode groups clique members together', () => {
+  const g = buildTwoCliquesGraph();
+  const alg = new Leiden(g);
+  alg.run();
+  const cA = alg.communityOfNode(0);
+  assert.strictEqual(alg.communityOfNode(1), cA);
+  assert.strictEqual(alg.communityOfNode(2), cA);
+  assert.strictEqual(alg.communityOfNode(3), cA);
+  const cB = alg.communityOfNode(4);
+  assert.strictEqual(alg.communityOfNode(5), cB);
+  assert.strictEqual(alg.communityOfNode(6), cB);
+  assert.strictEqual(alg.communityOfNode(7), cB);
+  assert.notStrictEqual(cA, cB);
+});
+
+test('Leiden: getPartition returns membership Float64Array + count', () => {
+  const g = buildTwoCliquesGraph();
+  const alg = new Leiden(g);
+  alg.run();
+  const { membership, count } = alg.getPartition();
+  assert.ok(membership instanceof Float64Array);
+  assert.strictEqual(membership.length, 8);
+  assert.strictEqual(count, 2);
+  for (let i = 0; i < 8; i++)
+    assert.strictEqual(membership[i], alg.communityOfNode(i));
+});
+
+test('Leiden: getCommunities returns array of arrays covering all nodes', () => {
+  const g = buildTwoCliquesGraph();
+  const alg = new Leiden(g);
+  alg.run();
+  const comms = alg.getCommunities();
+  assert.strictEqual(comms.length, 2);
+  const allNodes = comms.flat().sort((a, b) => a - b);
+  assert.deepStrictEqual(allNodes, [0, 1, 2, 3, 4, 5, 6, 7]);
+});
+
+test('Leiden: modularity is positive for two-clique graph', () => {
+  const g = buildTwoCliquesGraph();
+  const alg = new Leiden(g);
+  alg.run();
+  const Q = alg.modularity();
+  assert.ok(typeof Q === 'number' && Q > 0 && Q <= 1.0,
+    `Expected modularity in (0, 1], got ${Q}`);
+});
+
+test('Leiden: runs on jazz.graph', () => {
+  const g = readMETIS(path.join(inputDir, 'jazz.graph'));
+  const alg = new Leiden(g);
+  alg.run();
+  const n = alg.numberOfCommunities();
+  assert.ok(n > 0 && n < g.numberOfNodes(),
+    `Expected communities between 1 and n, got ${n}`);
+  const Q = alg.modularity();
+  assert.ok(Q > 0, `Expected positive modularity, got ${Q}`);
+  console.log(`    jazz.graph Leiden:  ${n} communities, modularity=${Q.toFixed(4)}`);
 });
 
 // ── Summary ──────────────────────────────────────────────────────────────────

@@ -8,6 +8,8 @@
  *   PageRank           – wraps NetworKit::PageRank
  *   DegreeCentrality   – wraps NetworKit::DegreeCentrality
  *   ConnectedComponents– wraps NetworKit::ConnectedComponents
+ *   Louvain            – wraps NetworKit::PLM (Parallel Louvain Method)
+ *   Leiden             – wraps NetworKit::ParallelLeiden
  *
  * Exposed JS functions:
  *   readMETIS(path)                             → Graph
@@ -22,9 +24,14 @@
 #include <networkit/centrality/DegreeCentrality.hpp>
 #include <networkit/centrality/PageRank.hpp>
 #include <networkit/components/ConnectedComponents.hpp>
+#include <networkit/community/PLM.hpp>
+#include <networkit/community/ParallelLeiden.hpp>
+#include <networkit/community/Modularity.hpp>
+#include <networkit/structures/Partition.hpp>
 #include <networkit/io/EdgeListReader.hpp>
 #include <networkit/io/METISGraphReader.hpp>
 
+#include <map>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -918,6 +925,252 @@ private:
 };
 
 // ============================================================================
+// Macro: common methods shared by Louvain and Leiden wrappers.
+//
+// Requires the host class to have members:
+//   std::unique_ptr<AlgoType>  algo_
+//   const Graph               *graphPtr_
+// ============================================================================
+#define CLUSTERING_COMMON_METHODS()                                                       \
+    Napi::Value Run(const Napi::CallbackInfo &info) {                                     \
+        try { algo_->run(); }                                                              \
+        catch (const std::exception &e) { throwError(info.Env(), e); }                   \
+        return info.Env().Undefined();                                                     \
+    }                                                                                      \
+    Napi::Value HasFinished(const Napi::CallbackInfo &info) {                             \
+        return Napi::Boolean::New(info.Env(), algo_->hasFinished());                      \
+    }                                                                                      \
+    Napi::Value NumberOfCommunities(const Napi::CallbackInfo &info) {                     \
+        try {                                                                              \
+            algo_->assureFinished();                                                       \
+            return Napi::Number::New(info.Env(),                                          \
+                static_cast<double>(algo_->getPartition().numberOfSubsets()));            \
+        } catch (const std::exception &e) {                                               \
+            throwError(info.Env(), e);                                                    \
+            return info.Env().Undefined();                                                 \
+        }                                                                                  \
+    }                                                                                      \
+    Napi::Value CommunityOfNode(const Napi::CallbackInfo &info) {                         \
+        if (info.Length() < 1) {                                                          \
+            Napi::TypeError::New(info.Env(), "communityOfNode(u)")                        \
+                .ThrowAsJavaScriptException();                                             \
+            return info.Env().Undefined();                                                 \
+        }                                                                                  \
+        try {                                                                              \
+            node u = jsToNode(info[0]);                                                   \
+            return Napi::Number::New(info.Env(),                                          \
+                static_cast<double>(algo_->getPartition().subsetOf(u)));                  \
+        } catch (const std::exception &e) {                                               \
+            throwError(info.Env(), e);                                                    \
+            return info.Env().Undefined();                                                 \
+        }                                                                                  \
+    }                                                                                      \
+    /**                                                                                    \
+     * getPartition() → { membership: Float64Array, count: number }                       \
+     *   membership[i] is the community id of node i (indices are partition-internal).    \
+     *   count is the number of distinct non-empty communities.                           \
+     */                                                                                    \
+    Napi::Value GetPartition(const Napi::CallbackInfo &info) {                            \
+        try {                                                                              \
+            algo_->assureFinished();                                                       \
+            const Partition &P = algo_->getPartition();                                   \
+            const auto &vec = P.getVector();                                              \
+            auto buf = Napi::ArrayBuffer::New(info.Env(),                                 \
+                           vec.size() * sizeof(double));                                  \
+            double *dst = static_cast<double *>(buf.Data());                              \
+            for (size_t i = 0; i < vec.size(); ++i)                                      \
+                dst[i] = static_cast<double>(vec[i]);                                     \
+            Napi::Object result = Napi::Object::New(info.Env());                          \
+            result.Set("membership",                                                       \
+                Napi::Float64Array::New(info.Env(), vec.size(), buf, 0));                 \
+            result.Set("count", Napi::Number::New(info.Env(),                             \
+                static_cast<double>(P.numberOfSubsets())));                               \
+            return result;                                                                  \
+        } catch (const std::exception &e) {                                               \
+            throwError(info.Env(), e);                                                    \
+            return info.Env().Undefined();                                                 \
+        }                                                                                  \
+    }                                                                                      \
+    /**                                                                                    \
+     * getCommunities() → number[][]                                                       \
+     *   Each inner array holds the node ids belonging to one community.                  \
+     *   Communities are ordered by ascending internal community id.                      \
+     */                                                                                    \
+    Napi::Value GetCommunities(const Napi::CallbackInfo &info) {                          \
+        try {                                                                              \
+            algo_->assureFinished();                                                       \
+            const Partition &P = algo_->getPartition();                                   \
+            std::map<NetworKit::index, std::vector<node>> comMap;                         \
+            P.forEntries([&](NetworKit::index u, NetworKit::index cid) {                  \
+                comMap[cid].push_back(static_cast<node>(u));                              \
+            });                                                                            \
+            Napi::Array outer = Napi::Array::New(info.Env(), comMap.size());              \
+            uint32_t ci = 0;                                                              \
+            for (auto &kv : comMap) {                                                     \
+                Napi::Array inner = Napi::Array::New(info.Env(), kv.second.size());       \
+                for (uint32_t ni = 0; ni < (uint32_t)kv.second.size(); ++ni)             \
+                    inner[ni] = nodeToJs(info.Env(), kv.second[ni]);                      \
+                outer[ci++] = inner;                                                       \
+            }                                                                              \
+            return outer;                                                                  \
+        } catch (const std::exception &e) {                                               \
+            throwError(info.Env(), e);                                                    \
+            return info.Env().Undefined();                                                 \
+        }                                                                                  \
+    }                                                                                      \
+    /**                                                                                    \
+     * modularity() → number                                                               \
+     *   Returns the modularity Q ∈ [−0.5, 1.0] of the resulting partition.              \
+     */                                                                                    \
+    Napi::Value GetModularity(const Napi::CallbackInfo &info) {                           \
+        try {                                                                              \
+            algo_->assureFinished();                                                       \
+            Modularity mod;                                                                \
+            return Napi::Number::New(info.Env(),                                          \
+                mod.getQuality(algo_->getPartition(), *graphPtr_));                       \
+        } catch (const std::exception &e) {                                               \
+            throwError(info.Env(), e);                                                    \
+            return info.Env().Undefined();                                                 \
+        }                                                                                  \
+    }
+
+// ============================================================================
+// LouvainWrapper  (JS class: Louvain)
+//   Wraps NetworKit::PLM – Parallel Louvain Method, a multi-level modularity
+//   maximiser.  Operates on undirected graphs.
+// ============================================================================
+class LouvainWrapper : public Napi::ObjectWrap<LouvainWrapper> {
+public:
+    static Napi::Object Init(Napi::Env env, Napi::Object exports) {
+        Napi::Function func = DefineClass(env, "Louvain", {
+            InstanceMethod("run",                &LouvainWrapper::Run),
+            InstanceMethod("hasFinished",        &LouvainWrapper::HasFinished),
+            InstanceMethod("numberOfCommunities",&LouvainWrapper::NumberOfCommunities),
+            InstanceMethod("communityOfNode",    &LouvainWrapper::CommunityOfNode),
+            InstanceMethod("getPartition",       &LouvainWrapper::GetPartition),
+            InstanceMethod("getCommunities",     &LouvainWrapper::GetCommunities),
+            InstanceMethod("modularity",         &LouvainWrapper::GetModularity),
+        });
+        exports.Set("Louvain", func);
+        return exports;
+    }
+
+    /**
+     * JS: new Louvain(graph [, refine=false, gamma=1.0, maxIter=32, turbo=true, recurse=true])
+     *
+     * @param graph    An undirected Graph or GraphR.
+     * @param refine   Add a second refinement pass (default false).
+     * @param gamma    Resolution parameter: 1.0 = standard modularity (default 1.0).
+     * @param maxIter  Maximum move-phase iterations (default 32).
+     * @param turbo    Faster mode with O(n) extra memory per thread (default true).
+     * @param recurse  Use recursive coarsening (default true).
+     */
+    explicit LouvainWrapper(const Napi::CallbackInfo &info)
+        : Napi::ObjectWrap<LouvainWrapper>(info) {
+        if (info.Length() < 1) {
+            Napi::TypeError::New(info.Env(),
+                "Louvain(graph [, refine, gamma, maxIter, turbo, recurse])")
+                .ThrowAsJavaScriptException();
+            return;
+        }
+        try {
+            bool  refine  = info.Length() >= 2 && info[1].As<Napi::Boolean>();
+            double gamma  = info.Length() >= 3
+                            ? info[2].As<Napi::Number>().DoubleValue() : 1.0;
+            count maxIter = info.Length() >= 4
+                            ? static_cast<count>(info[3].As<Napi::Number>().DoubleValue())
+                            : 32;
+            bool  turbo   = info.Length() >= 5
+                            ? (bool)info[4].As<Napi::Boolean>() : true;
+            bool  recurse = info.Length() >= 6
+                            ? (bool)info[5].As<Napi::Boolean>() : true;
+
+            graphRef_ = Napi::Persistent(info[0].As<Napi::Object>());
+            const Graph &G = extractGraph(info[0]);
+            graphPtr_ = &G;
+            algo_ = std::make_unique<PLM>(G, refine, gamma, "balanced",
+                                          maxIter, turbo, recurse);
+        } catch (const std::exception &e) {
+            throwError(info.Env(), e);
+        }
+    }
+
+private:
+    Napi::ObjectReference graphRef_;
+    const Graph *graphPtr_ = nullptr;
+    std::unique_ptr<PLM> algo_;
+
+    CLUSTERING_COMMON_METHODS()
+};
+
+// ============================================================================
+// LeidenWrapper  (JS class: Leiden)
+//   Wraps NetworKit::ParallelLeiden – a parallel implementation of the Leiden
+//   community detection algorithm.  Operates on undirected graphs.
+//
+//   Note: The NetworKit implementation may produce a small fraction of
+//   internally disconnected communities.  Use with caution on graphs where
+//   strict connectivity guarantees are required.
+// ============================================================================
+class LeidenWrapper : public Napi::ObjectWrap<LeidenWrapper> {
+public:
+    static Napi::Object Init(Napi::Env env, Napi::Object exports) {
+        Napi::Function func = DefineClass(env, "Leiden", {
+            InstanceMethod("run",                &LeidenWrapper::Run),
+            InstanceMethod("hasFinished",        &LeidenWrapper::HasFinished),
+            InstanceMethod("numberOfCommunities",&LeidenWrapper::NumberOfCommunities),
+            InstanceMethod("communityOfNode",    &LeidenWrapper::CommunityOfNode),
+            InstanceMethod("getPartition",       &LeidenWrapper::GetPartition),
+            InstanceMethod("getCommunities",     &LeidenWrapper::GetCommunities),
+            InstanceMethod("modularity",         &LeidenWrapper::GetModularity),
+        });
+        exports.Set("Leiden", func);
+        return exports;
+    }
+
+    /**
+     * JS: new Leiden(graph [, iterations=3, randomize=true, gamma=1.0])
+     *
+     * @param graph      An undirected Graph or GraphR.
+     * @param iterations Number of Leiden iterations to run (default 3).
+     * @param randomize  Randomise node order each iteration (default true).
+     * @param gamma      Resolution parameter: 1.0 = standard modularity (default 1.0).
+     */
+    explicit LeidenWrapper(const Napi::CallbackInfo &info)
+        : Napi::ObjectWrap<LeidenWrapper>(info) {
+        if (info.Length() < 1) {
+            Napi::TypeError::New(info.Env(),
+                "Leiden(graph [, iterations, randomize, gamma])")
+                .ThrowAsJavaScriptException();
+            return;
+        }
+        try {
+            int    iterations = info.Length() >= 2
+                                ? static_cast<int>(info[1].As<Napi::Number>().DoubleValue())
+                                : 3;
+            bool   randomize  = info.Length() >= 3
+                                ? (bool)info[2].As<Napi::Boolean>() : true;
+            double gamma      = info.Length() >= 4
+                                ? info[3].As<Napi::Number>().DoubleValue() : 1.0;
+
+            graphRef_ = Napi::Persistent(info[0].As<Napi::Object>());
+            const Graph &G = extractGraph(info[0]);
+            graphPtr_ = &G;
+            algo_ = std::make_unique<ParallelLeiden>(G, iterations, randomize, gamma);
+        } catch (const std::exception &e) {
+            throwError(info.Env(), e);
+        }
+    }
+
+private:
+    Napi::ObjectReference graphRef_;
+    const Graph *graphPtr_ = nullptr;
+    std::unique_ptr<ParallelLeiden> algo_;
+
+    CLUSTERING_COMMON_METHODS()
+};
+
+// ============================================================================
 // Free functions: readMETIS, readEdgeList
 // ============================================================================
 
@@ -988,6 +1241,8 @@ static Napi::Object InitModule(Napi::Env env, Napi::Object exports) {
     PageRankWrapper::Init(env, exports);
     DegreeCentralityWrapper::Init(env, exports);
     ConnectedComponentsWrapper::Init(env, exports);
+    LouvainWrapper::Init(env, exports);
+    LeidenWrapper::Init(env, exports);
 
     exports.Set("readMETIS",    Napi::Function::New(env, ReadMETIS));
     exports.Set("readEdgeList", Napi::Function::New(env, ReadEdgeList));

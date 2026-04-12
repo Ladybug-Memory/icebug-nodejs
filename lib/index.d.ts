@@ -175,6 +175,145 @@ export class ConnectedComponents {
   getComponentSizes(): Record<string, number>;
 }
 
+// ── Clustering / community detection ─────────────────────────────────────────
+
+/**
+ * The result of a community detection algorithm.
+ *
+ * `membership[i]` is the internal community id assigned to node `i`.
+ * Community ids are **not** guaranteed to be consecutive starting at 0 —
+ * use `count` to know how many distinct communities exist.
+ */
+export interface PartitionResult {
+  /** Float64Array of length `numberOfNodes()`: node i → community id. */
+  membership: Float64Array;
+  /** Number of distinct (non-empty) communities. */
+  count: number;
+}
+
+/**
+ * Louvain community detection (NetworKit PLM — Parallel Louvain Method).
+ *
+ * Maximises modularity via a greedy, multi-level approach.
+ * Operates on **undirected** graphs; weights are respected when present.
+ */
+export class Louvain {
+  /**
+   * @param graph    An undirected Graph or GraphR.
+   * @param refine   Add a second refinement pass (default false).
+   * @param gamma    Resolution parameter — 1.0 is standard modularity (default 1.0).
+   *                 Lower values yield fewer, larger communities; higher values more,
+   *                 smaller ones.
+   * @param maxIter  Maximum move-phase iterations per level (default 32).
+   * @param turbo    Faster mode using O(n) extra memory per thread (default true).
+   * @param recurse  Use recursive coarsening (default true).
+   */
+  constructor(
+    graph:    Graph | GraphR,
+    refine?:  boolean,
+    gamma?:   number,
+    maxIter?: number,
+    turbo?:   boolean,
+    recurse?: boolean,
+  );
+
+  /** Run the algorithm. */
+  run(): void;
+
+  /** Returns true once `run()` has completed successfully. */
+  hasFinished(): boolean;
+
+  /** Number of communities in the detected partition. */
+  numberOfCommunities(): number;
+
+  /**
+   * Community id of node `u`.
+   * The id is an opaque integer meaningful only relative to other nodes'
+   * community ids (i.e. same id ⟺ same community).
+   */
+  communityOfNode(u: NodeId): number;
+
+  /**
+   * Full partition as a typed array.
+   * `membership[i]` is the community id of node `i`.
+   */
+  getPartition(): PartitionResult;
+
+  /**
+   * Communities as an array of node-id arrays.
+   * Each inner array contains the ids of all nodes in one community.
+   * Communities are returned in ascending order of their internal id.
+   */
+  getCommunities(): NodeId[][];
+
+  /**
+   * Modularity Q ∈ [−0.5, 1.0] of the detected partition.
+   * Higher values indicate a stronger community structure.
+   */
+  modularity(): number;
+}
+
+/**
+ * Leiden community detection (NetworKit ParallelLeiden).
+ *
+ * A refined version of Louvain that guarantees (in the sequential reference
+ * implementation) that all communities are internally connected.
+ *
+ * **Note:** The NetworKit parallel implementation may produce a small fraction
+ * of internally disconnected communities in some cases.
+ *
+ * Operates on **undirected** graphs; weights are respected when present.
+ */
+export class Leiden {
+  /**
+   * @param graph      An undirected Graph or GraphR.
+   * @param iterations Number of full Leiden iterations to run (default 3).
+   * @param randomize  Randomise node order each iteration (default true).
+   * @param gamma      Resolution parameter — 1.0 is standard modularity (default 1.0).
+   */
+  constructor(
+    graph:       Graph | GraphR,
+    iterations?: number,
+    randomize?:  boolean,
+    gamma?:      number,
+  );
+
+  /** Run the algorithm. */
+  run(): void;
+
+  /** Returns true once `run()` has completed successfully. */
+  hasFinished(): boolean;
+
+  /** Number of communities in the detected partition. */
+  numberOfCommunities(): number;
+
+  /**
+   * Community id of node `u`.
+   * The id is an opaque integer meaningful only relative to other nodes'
+   * community ids (i.e. same id ⟺ same community).
+   */
+  communityOfNode(u: NodeId): number;
+
+  /**
+   * Full partition as a typed array.
+   * `membership[i]` is the community id of node `i`.
+   */
+  getPartition(): PartitionResult;
+
+  /**
+   * Communities as an array of node-id arrays.
+   * Each inner array contains the ids of all nodes in one community.
+   * Communities are returned in ascending order of their internal id.
+   */
+  getCommunities(): NodeId[][];
+
+  /**
+   * Modularity Q ∈ [−0.5, 1.0] of the detected partition.
+   * Higher values indicate a stronger community structure.
+   */
+  modularity(): number;
+}
+
 // ── I/O functions ────────────────────────────────────────────────────────────
 
 /**
