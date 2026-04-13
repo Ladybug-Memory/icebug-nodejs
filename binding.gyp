@@ -6,15 +6,7 @@
 
       "include_dirs": [
         "<!@(node -p \"require('node-addon-api').include\")",
-        "vendor/include",
-        "/opt/homebrew/opt/apache-arrow/include",
-        "/opt/homebrew/opt/libomp/include"
-      ],
-
-      "libraries": [
-        "<(module_root_dir)/vendor/lib/libnetworkit.dylib",
-        "-L/opt/homebrew/opt/apache-arrow/lib", "-larrow",
-        "-L/opt/homebrew/opt/libomp/lib",       "-lomp"
+        "vendor/include"
       ],
 
       "cflags":    ["-fexceptions", "-frtti"],
@@ -27,6 +19,15 @@
 
       "conditions": [
         ["OS=='mac'", {
+          "include_dirs": [
+            "/opt/homebrew/opt/apache-arrow/include",
+            "/opt/homebrew/opt/libomp/include"
+          ],
+          "libraries": [
+            "-L<(module_root_dir)/vendor/lib", "-lnetworkit",
+            "-L/opt/homebrew/opt/apache-arrow/lib", "-larrow",
+            "-L/opt/homebrew/opt/libomp/lib",       "-lomp"
+          ],
           "xcode_settings": {
             "GCC_ENABLE_CPP_EXCEPTIONS":   "YES",
             "GCC_ENABLE_CPP_RTTI":         "YES",
@@ -41,12 +42,33 @@
             ]
           }
         }],
+
         ["OS=='linux'", {
+          "libraries": [
+            "-L<(module_root_dir)/vendor/lib", "-lnetworkit",
+            "-larrow"
+          ],
           "cflags_cc": ["-fopenmp"],
-          "ldflags":   [
+          "ldflags": [
             "-Wl,-rpath,$$ORIGIN/../../vendor/lib",
             "-fopenmp"
           ]
+        }],
+
+        ["OS=='win'", {
+          "libraries": [
+            "<(module_root_dir)/vendor/lib/networkit.lib",
+            "<(module_root_dir)/vendor/lib/networkit/networkit_state.lib",
+            "<(module_root_dir)/vendor/lib/tlx.lib",
+            "arrow.lib"
+          ],
+          "msvs_settings": {
+            "VCCLCompilerTool": {
+              "ExceptionHandling": 1,
+              "RuntimeLibrary": 0,
+              "AdditionalOptions": ["/std:c++20", "/openmp", "/W0"]
+            }
+          }
         }]
       ]
     }

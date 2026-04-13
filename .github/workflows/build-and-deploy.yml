@@ -1,0 +1,146 @@
+name: Build and Deploy
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build (${{ matrix.platform }}-${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: linux
+            arch: x64
+          - os: macos-latest
+            platform: darwin
+            arch: arm64
+          - os: windows-latest
+            platform: win32
+            arch: x64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # ── System dependencies ────────────────────────────────────────────────
+      - name: Install system dependencies (Linux)
+        if: matrix.platform == 'linux'
+        run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm-snapshot.asc
+          echo "deb http://apt.llvm.org/noble llvm-toolchain-noble-20 main" | sudo tee /etc/apt/sources.list.d/llvm20.list
+          wget -q https://apache.jfrog.io/artifactory/arrow/ubuntu/apache-arrow-apt-source-latest-noble.deb
+          sudo apt-get install -y -V ./apache-arrow-apt-source-latest-noble.deb
+          sudo apt-get update -q
+          sudo apt-get install -y patchelf libomp-20-dev libarrow-dev
+
+      - name: Install system dependencies (macOS)
+        if: matrix.platform == 'darwin'
+        run: brew install apache-arrow libomp
+
+      - name: Install system dependencies (Windows)
+        if: matrix.platform == 'win32'
+        shell: pwsh
+        run: |
+          vcpkg install arrow:x64-windows
+          # Wire vcpkg into MSBuild so cl.exe finds arrow headers/libs automatically
+          vcpkg integrate install
+
+      # ── Build ──────────────────────────────────────────────────────────────
+      - name: Download icebug prebuilt libs
+        shell: bash
+        run: bash scripts/download-icebug.sh
+
+      - name: Install Node.js dependencies
+        run: npm install --ignore-scripts
+
+      - name: Build native addon
+        run: npx node-gyp rebuild
+
+      # ── Test ──────────────────────────────────────────────────────────────
+      # On Linux the embedded rpath ($ORIGIN/../../vendor/lib) isn't reliable
+      # in the GYP/make escaping chain at CI time, so point LD_LIBRARY_PATH
+      # at vendor/lib/ directly. patchelf handles the rpath for distribution.
+      # On Windows, DLL lookup requires the DLLs to live next to the .node.
+      - name: Copy vendor DLLs next to .node for testing (Windows)
+        if: matrix.platform == 'win32'
+        shell: bash
+        run: find vendor/lib -name "*.dll" -exec cp {} build/Release/ \;
+
+      - name: Run tests
+        run: npm test
+        env:
+          LD_LIBRARY_PATH: ${{ matrix.platform == 'linux' && format('{0}/vendor/lib', github.workspace) || '' }}
+
+      # ── Rpath fixup for distribution ──────────────────────────────────────
+      # Adds $ORIGIN / @loader_path as an *additional* rpath so the .node
+      # finds the vendor lib next to itself in prebuilds/{platform}-{arch}/.
+      # The original vendor/lib rpath is preserved for local development.
+      - name: Add $ORIGIN rpath (Linux)
+        if: matrix.platform == 'linux'
+        run: patchelf --add-rpath '$ORIGIN' build/Release/icebug.node
+
+      - name: Add @loader_path rpath (macOS)
+        if: matrix.platform == 'darwin'
+        run: install_name_tool -add_rpath @loader_path/ build/Release/icebug.node
+
+      # ── Stage: only the two runtime files that ship in the package ─────────
+      - name: Stage runtime files
+        shell: bash
+        run: |
+          mkdir -p staging
+          cp build/Release/icebug.node staging/
+          find vendor/lib \( -name "*.so" -o -name "*.so.*" \
+            -o -name "*.dylib" -o -name "*.dll" \) -exec cp {} staging/ \;
+
+      - name: Upload prebuilt artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: prebuilds-${{ matrix.platform }}-${{ matrix.arch }}
+          path: staging/
+          if-no-files-found: error
+
+  # ── Publish ────────────────────────────────────────────────────────────────
+  publish:
+    name: Publish to npm
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write   # required for npm trusted publishing
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      # Download all three platform artifacts into prebuilds-staging/
+      # Each lands at prebuilds-staging/prebuilds-{platform}-{arch}/
+      - name: Download all prebuilt artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: prebuilds-*
+          path: prebuilds-staging
+
+      # Rename prebuilds-staging/prebuilds-linux-x64 → prebuilds/linux-x64, etc.
+      - name: Assemble prebuilds/ directory
+        run: |
+          mkdir -p prebuilds
+          for dir in prebuilds-staging/prebuilds-*; do
+            key="${dir#prebuilds-staging/prebuilds-}"
+            mv "$dir" "prebuilds/$key"
+          done
+
+      - name: Publish to npm
+        run: npm publish --provenance --access public

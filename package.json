@@ -1,16 +1,22 @@
 {
-  "name": "icebug",
-  "version": "0.1.0",
+  "name": "@ladybugmem/icebug",
+  "version": "0.1.1",
   "description": "Node.js bindings for icebug – high-performance graph analytics (NetworKit fork with Arrow CSR support)",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
+  "files": [
+    "lib/",
+    "src/",
+    "prebuilds/",
+    "binding.gyp",
+    "scripts/download-icebug.sh"
+  ],
   "scripts": {
-    "download":  "bash scripts/download-icebug.sh",
-    "install":   "npm run download && node-gyp rebuild",
-    "build":     "npm run download && node-gyp rebuild",
+    "download":    "bash scripts/download-icebug.sh",
+    "build":       "npm run download && node-gyp rebuild",
     "build:debug": "npm run download && node-gyp rebuild --debug",
-    "clean":     "node-gyp clean",
-    "test":      "node test/basic.test.js"
+    "clean":       "node-gyp clean",
+    "test":        "node test/basic.test.js"
   },
   "keywords": ["graph", "network", "analytics", "networkit", "icebug", "betweenness", "pagerank"],
   "license": "MIT",
@@ -26,10 +32,6 @@
   },
   "engines": {
     "node": ">=18.0.0"
-  },
-  "binary": {
-    "module_name": "icebug",
-    "module_path": "./build/Release"
   },
   "gypfile": true
 }

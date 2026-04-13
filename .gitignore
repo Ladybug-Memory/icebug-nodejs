@@ -1,9 +1,16 @@
 # Dependencies
 node_modules/
 
-# Build output
+# Build output (except the final .node binary which is needed at runtime)
 build/
-*.node
+*.node.gyp
+*.node.gyp-js
+
+# Built native addon (committed to repo for npm distribution)
+# build/Release/icebug.node
+
+# Vendor prebuilt libraries (needed at runtime)
+# vendor/
 *.node.gyp
 *.node.gyp-js
 
