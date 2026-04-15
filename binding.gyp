@@ -65,7 +65,7 @@
           "msvs_settings": {
             "VCCLCompilerTool": {
               "ExceptionHandling": 1,
-              "RuntimeLibrary": 1,  # MD_DynamicRelease to match prebuilt networkit.lib
+              "RuntimeLibrary": 2,  # 2 = /MD (MD_DynamicRelease), matching prebuilt networkit.lib
               "AdditionalOptions": ["/std:c++20", "/openmp", "/W0"]
             }
           }

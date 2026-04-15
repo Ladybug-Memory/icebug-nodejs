@@ -36,10 +36,8 @@ jobs:
         if: matrix.platform == 'win32'
         uses: actions/cache@v4
         with:
-          path: C:\vcpkg\packages
-          key: vcpkg-packages-${{ runner.os }}-arrow
-          restore-keys: |
-            vcpkg-packages-${{ runner.os }}-arrow
+          path: C:\vcpkg-binary-cache
+          key: vcpkg-binary-cache-${{ runner.os }}-arrow-23.0.1
 
       - name: Install system dependencies (Linux)
         if: matrix.platform == 'linux'
@@ -58,7 +56,10 @@ jobs:
       - name: Install system dependencies (Windows)
         if: matrix.platform == 'win32'
         shell: pwsh
+        env:
+          VCPKG_DEFAULT_BINARY_CACHE: C:\vcpkg-binary-cache
         run: |
+          New-Item -ItemType Directory -Force C:\vcpkg-binary-cache | Out-Null
           vcpkg install arrow:x64-windows
           # Wire vcpkg into MSBuild so cl.exe finds arrow headers/libs automatically
           vcpkg integrate install
