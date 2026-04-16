@@ -9,9 +9,11 @@
     "src/",
     "prebuilds/",
     "binding.gyp",
-    "scripts/download-icebug.sh"
+    "scripts/download-icebug.sh",
+    "scripts/install.js"
   ],
   "scripts": {
+    "install":     "node scripts/install.js",
     "download":    "bash scripts/download-icebug.sh",
     "build":       "npm run download && node-gyp rebuild",
     "build:debug": "npm run download && node-gyp rebuild --debug",
