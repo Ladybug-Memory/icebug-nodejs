@@ -149,5 +149,9 @@ jobs:
             mv "$dir" "prebuilds/$key"
           done
 
+      # Trusted publishing needs recent npm version
+      - name: Upgrade npm
+        run: npm install -g npm@latest
+
       - name: Publish to npm
         run: npm publish --provenance --access public
