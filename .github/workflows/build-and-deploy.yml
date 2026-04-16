@@ -20,9 +20,6 @@ jobs:
           - os: macos-latest
             platform: darwin
             arch: arm64
-          - os: windows-latest
-            platform: win32
-            arch: x64
 
     steps:
       - uses: actions/checkout@v4
