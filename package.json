@@ -1,6 +1,6 @@
 {
   "name": "@ladybugmem/icebug",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Node.js bindings for icebug – high-performance graph analytics (NetworKit fork with Arrow CSR support)",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
