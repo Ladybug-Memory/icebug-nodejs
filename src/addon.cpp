@@ -9,7 +9,7 @@
  *   DegreeCentrality   – wraps NetworKit::DegreeCentrality
  *   ConnectedComponents– wraps NetworKit::ConnectedComponents
  *   Louvain            – wraps NetworKit::PLM (Parallel Louvain Method)
- *   Leiden             – wraps NetworKit::ParallelLeiden
+ *   Leiden             – wraps NetworKit::ParallelLeidenView
  *
  * Exposed JS functions:
  *   readMETIS(path)                             → Graph
@@ -25,7 +25,7 @@
 #include <networkit/centrality/PageRank.hpp>
 #include <networkit/components/ConnectedComponents.hpp>
 #include <networkit/community/PLM.hpp>
-#include <networkit/community/ParallelLeiden.hpp>
+#include <networkit/community/ParallelLeidenView.hpp>
 #include <networkit/community/Modularity.hpp>
 #include <networkit/structures/Partition.hpp>
 #include <networkit/io/EdgeListReader.hpp>
@@ -1105,8 +1105,8 @@ private:
 
 // ============================================================================
 // LeidenWrapper  (JS class: Leiden)
-//   Wraps NetworKit::ParallelLeiden – a parallel implementation of the Leiden
-//   community detection algorithm.  Operates on undirected graphs.
+//   Wraps NetworKit::ParallelLeidenView – a memory-efficient parallel Leiden
+//   implementation with pluggable move-phase scoring extensions.
 //
 //   Note: The NetworKit implementation may produce a small fraction of
 //   internally disconnected communities.  Use with caution on graphs where
@@ -1123,6 +1123,8 @@ public:
             InstanceMethod("getPartition",       &LeidenWrapper::GetPartition),
             InstanceMethod("getCommunities",     &LeidenWrapper::GetCommunities),
             InstanceMethod("modularity",         &LeidenWrapper::GetModularity),
+            InstanceMethod("loadMoveScoringExtension",  &LeidenWrapper::LoadMoveScoringExtension),
+            InstanceMethod("unloadMoveScoringExtension",&LeidenWrapper::UnloadMoveScoringExtension),
         });
         exports.Set("Leiden", func);
         return exports;
@@ -1156,7 +1158,7 @@ public:
             graphRef_ = Napi::Persistent(info[0].As<Napi::Object>());
             const Graph &G = extractGraph(info[0]);
             graphPtr_ = &G;
-            algo_ = std::make_unique<ParallelLeiden>(G, iterations, randomize, gamma);
+            algo_ = std::make_unique<ParallelLeidenView>(G, iterations, randomize, gamma);
         } catch (const std::exception &e) {
             throwError(info.Env(), e);
         }
@@ -1165,9 +1167,32 @@ public:
 private:
     Napi::ObjectReference graphRef_;
     const Graph *graphPtr_ = nullptr;
-    std::unique_ptr<ParallelLeiden> algo_;
+    std::unique_ptr<ParallelLeidenView> algo_;
 
     CLUSTERING_COMMON_METHODS()
+
+    Napi::Value LoadMoveScoringExtension(const Napi::CallbackInfo &info) {
+        if (info.Length() < 1 || !info[0].IsString()) {
+            Napi::TypeError::New(info.Env(), "loadMoveScoringExtension(sharedLibraryPath)")
+                .ThrowAsJavaScriptException();
+            return info.Env().Undefined();
+        }
+        try {
+            algo_->loadMoveScoringExtension(info[0].As<Napi::String>().Utf8Value());
+        } catch (const std::exception &e) {
+            throwError(info.Env(), e);
+        }
+        return info.This();
+    }
+
+    Napi::Value UnloadMoveScoringExtension(const Napi::CallbackInfo &info) {
+        try {
+            algo_->unloadMoveScoringExtension();
+        } catch (const std::exception &e) {
+            throwError(info.Env(), e);
+        }
+        return info.This();
+    }
 };
 
 // ============================================================================

@@ -254,7 +254,7 @@ export class Louvain {
 }
 
 /**
- * Leiden community detection (NetworKit ParallelLeiden).
+ * Leiden community detection (NetworKit ParallelLeidenView).
  *
  * A refined version of Louvain that guarantees (in the sequential reference
  * implementation) that all communities are internally connected.
@@ -312,7 +312,28 @@ export class Leiden {
    * Higher values indicate a stronger community structure.
    */
   modularity(): number;
+
+  /**
+   * Load a shared-library scorer extension for the move phase.
+   *
+   * The library must export `networkitParallelLeidenCommunityScore`.
+   * Use `parallelLeidenScoringExtensionPath('cpm')` or
+   * `parallelLeidenScoringExtensionPath('modularity')` for bundled scorers.
+   */
+  loadMoveScoringExtension(sharedLibraryPath: string): this;
+
+  /** Unload a previously loaded scorer extension and restore modularity scoring. */
+  unloadMoveScoringExtension(): this;
 }
+
+export type ParallelLeidenScoringExtension = 'modularity' | 'cpm';
+
+/**
+ * Return the expected path for an icebug-bundled ParallelLeiden scoring plugin.
+ */
+export function parallelLeidenScoringExtensionPath(
+  name: ParallelLeidenScoringExtension,
+): string;
 
 // ── I/O functions ────────────────────────────────────────────────────────────
 

@@ -6,6 +6,7 @@
  */
 
 const assert = require('assert');
+const fs     = require('fs');
 const path   = require('path');
 
 const {
@@ -17,6 +18,7 @@ const {
   ConnectedComponents,
   Louvain,
   Leiden,
+  parallelLeidenScoringExtensionPath,
   readMETIS,
   readEdgeList,
   graphFromEdges,
@@ -429,7 +431,7 @@ test('Louvain: runs on jazz.graph', () => {
 });
 
 // ── Leiden ────────────────────────────────────────────────────────────────────
-console.log('\nLeiden (ParallelLeiden)');
+console.log('\nLeiden (ParallelLeidenView)');
 
 test('Leiden: run and hasFinished', () => {
   const g = buildTwoCliquesGraph();
@@ -437,6 +439,40 @@ test('Leiden: run and hasFinished', () => {
   assert.ok(!alg.hasFinished());
   alg.run();
   assert.ok(alg.hasFinished());
+});
+
+test('Leiden: exposes move-scoring extension controls', () => {
+  const g = buildTwoCliquesGraph();
+  const alg = new Leiden(g);
+  assert.strictEqual(typeof alg.loadMoveScoringExtension, 'function');
+  assert.strictEqual(typeof alg.unloadMoveScoringExtension, 'function');
+  assert.strictEqual(alg.unloadMoveScoringExtension(), alg);
+});
+
+test('Leiden: bundled CPM scoring extension path', () => {
+  const extensionPath = parallelLeidenScoringExtensionPath('cpm');
+  assert.ok(extensionPath.endsWith(
+    process.platform === 'darwin'
+      ? 'libnetworkit_parallel_leiden_cpm_extension.dylib'
+      : process.platform === 'win32'
+        ? 'networkit_parallel_leiden_cpm_extension.dll'
+        : 'libnetworkit_parallel_leiden_cpm_extension.so'
+  ));
+});
+
+test('Leiden: can load bundled CPM scoring extension when present', () => {
+  const extensionPath = parallelLeidenScoringExtensionPath('cpm');
+  if (!fs.existsSync(extensionPath)) {
+    console.log(`    skipping CPM load: ${extensionPath} not found`);
+    return;
+  }
+
+  const g = buildTwoCliquesGraph();
+  const alg = new Leiden(g);
+  assert.strictEqual(alg.loadMoveScoringExtension(extensionPath), alg);
+  alg.run();
+  assert.ok(alg.hasFinished());
+  assert.strictEqual(alg.unloadMoveScoringExtension(), alg);
 });
 
 test('Leiden: finds two communities on two-clique graph', () => {

@@ -1,25 +1,22 @@
 #!/usr/bin/env bash
 # download-icebug.sh — fetch the platform-specific icebug prebuilt into vendor/
 # Usage: ./scripts/download-icebug.sh [version]
-#   version  optional tag, e.g. "12.4" (default: latest)
+#   version  optional tag, e.g. "12.7" (default: 12.7)
 set -euo pipefail
 
 REPO="Ladybug-Memory/icebug"
 VENDOR_DIR="$(cd "$(dirname "$0")/.." && pwd)/vendor"
+DEFAULT_TAG="12.7"
 
 # ---------------------------------------------------------------------------
 # Resolve version tag
 # ---------------------------------------------------------------------------
 if [[ "${1:-}" != "" ]]; then
   TAG="$1"
-  BASE_URL="https://github.com/${REPO}/releases/download/${TAG}"
 else
-  # Follow the /releases/latest redirect to discover the real tag
-  LATEST_URL="https://github.com/${REPO}/releases/latest"
-  REDIRECT=$(curl -fsSL -o /dev/null -w '%{url_effective}' "$LATEST_URL")
-  TAG="${REDIRECT##*/}"          # strip everything up to the last /
-  BASE_URL="https://github.com/${REPO}/releases/download/${TAG}"
+  TAG="${ICEBUG_VERSION:-${DEFAULT_TAG}}"
 fi
+BASE_URL="https://github.com/${REPO}/releases/download/${TAG}"
 
 echo "icebug release: ${TAG}"
 
