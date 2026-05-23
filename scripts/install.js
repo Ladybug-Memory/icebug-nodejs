@@ -30,7 +30,7 @@ console.log(`icebug: no prebuilt binary for ${platformKey}, compiling from sourc
 
 try {
   execSync('npm run download', { cwd: root, stdio: 'inherit' });
-  execSync('node-gyp rebuild',  { cwd: root, stdio: 'inherit' });
+  execSync('node scripts/build-native.js', { cwd: root, stdio: 'inherit' });
 } catch (err) {
   console.error('icebug: compilation failed:', err.message);
   process.exit(1);

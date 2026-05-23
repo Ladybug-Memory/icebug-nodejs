@@ -9,14 +9,15 @@
     "src/",
     "prebuilds/",
     "binding.gyp",
+    "scripts/build-native.js",
     "scripts/download-icebug.sh",
     "scripts/install.js"
   ],
   "scripts": {
     "install":     "node scripts/install.js",
     "download":    "bash scripts/download-icebug.sh",
-    "build":       "npm run download && node-gyp rebuild",
-    "build:debug": "npm run download && node-gyp rebuild --debug",
+    "build":       "npm run download && node scripts/build-native.js",
+    "build:debug": "npm run download && node scripts/build-native.js --debug",
     "clean":       "node-gyp clean",
     "test":        "node test/basic.test.js"
   },
