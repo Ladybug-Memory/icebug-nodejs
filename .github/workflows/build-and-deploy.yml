@@ -47,8 +47,9 @@ jobs:
           "commit=$commit" >> $env:GITHUB_OUTPUT
 
       - name: Cache system dependencies (Windows)
+        id: vcpkg-cache
         if: matrix.platform == 'win32'
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: C:\vcpkg-binary-cache
           key: vcpkg-binary-cache-${{ runner.os }}-${{ steps.vcpkg-version.outputs.commit }}-arrow-x64-windows
@@ -79,6 +80,13 @@ jobs:
           vcpkg install arrow:x64-windows
           # Wire vcpkg into MSBuild so cl.exe finds arrow headers/libs automatically
           vcpkg integrate install
+
+      - name: Save system dependencies cache (Windows)
+        if: matrix.platform == 'win32' && steps.vcpkg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: C:\vcpkg-binary-cache
+          key: ${{ steps.vcpkg-cache.outputs.cache-primary-key }}
 
       # ── Build ──────────────────────────────────────────────────────────────
       - name: Download icebug prebuilt libs
