@@ -1,0 +1,11 @@
+prefix=/Users/runner/work/icebug/icebug/dist
+exec_prefix=${prefix}
+includedir=${prefix}/include
+libdir=${exec_prefix}/lib
+
+Name: networkit
+Description: networkit
+URL: http://networkit.github.io
+Version: 
+Cflags: -I${includedir}  -DNETWORKIT_RELEASE_LOGGING
+Libs: -L${libdir} -lnetworkit

@@ -30,7 +30,28 @@ function useHomebrewLlvmIfAvailable(env) {
   return env;
 }
 
-const args = ['node-gyp', 'rebuild', ...process.argv.slice(2)];
+function nodeGypCommand() {
+  try {
+    return {
+      command: process.execPath,
+      args: [require.resolve('node-gyp/bin/node-gyp.js'), 'rebuild', ...process.argv.slice(2)],
+    };
+  } catch {
+    if (process.env.npm_execpath) {
+      return {
+        command: process.execPath,
+        args: [process.env.npm_execpath, 'exec', '--', 'node-gyp', 'rebuild', ...process.argv.slice(2)],
+      };
+    }
+
+    return {
+      command: process.platform === 'win32' ? 'npx.cmd' : 'npx',
+      args: ['node-gyp', 'rebuild', ...process.argv.slice(2)],
+    };
+  }
+}
+
+const { command, args } = nodeGypCommand();
 const env = useHomebrewLlvmIfAvailable(process.env);
 
 if (process.platform === 'darwin') {
@@ -43,7 +64,7 @@ if (process.platform === 'darwin') {
   }
 }
 
-execFileSync('npm', ['exec', '--', ...args], {
+execFileSync(command, args, {
   cwd: root,
   env,
   stdio: 'inherit',
