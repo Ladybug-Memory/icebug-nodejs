@@ -18,6 +18,9 @@ jobs:
           - os: ubuntu-24.04
             platform: linux
             arch: x64
+          - os: ubuntu-24.04-arm
+            platform: linux
+            arch: arm64
           - os: macos-latest
             platform: darwin
             arch: arm64
@@ -137,7 +140,7 @@ jobs:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
 
-      # Download all three platform artifacts into prebuilds-staging/
+      # Download all platform artifacts into prebuilds-staging/
       # Each lands at prebuilds-staging/prebuilds-{platform}-{arch}/
       - name: Download all prebuilt artifacts
         uses: actions/download-artifact@v4
