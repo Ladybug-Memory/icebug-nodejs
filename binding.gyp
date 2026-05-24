@@ -56,17 +56,21 @@
         }],
 
         ["OS=='win'", {
+          "include_dirs": [
+            "C:/vcpkg/installed/x64-windows/include"
+          ],
           "libraries": [
             "<(module_root_dir)/vendor/lib/networkit.lib",
             "<(module_root_dir)/vendor/lib/networkit/networkit_state.lib",
             "<(module_root_dir)/vendor/lib/tlx.lib",
-            "arrow.lib"
+            "C:/vcpkg/installed/x64-windows/lib/arrow.lib"
           ],
           "msvs_settings": {
             "VCCLCompilerTool": {
               "ExceptionHandling": 1,
               "RuntimeLibrary": 2,  # 2 = /MD (MD_DynamicRelease), matching prebuilt networkit.lib
-              "AdditionalOptions": ["/std:c++20", "/openmp", "/W0"]
+              "RuntimeTypeInfo": "true",
+              "AdditionalOptions": ["/std:c++20", "/openmp", "/W0", "/MD", "/GR"]
             }
           }
         }]

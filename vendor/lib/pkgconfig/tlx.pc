@@ -1,0 +1,11 @@
+prefix=/Users/runner/work/icebug/icebug/dist
+exec_prefix=${prefix}
+includedir=${prefix}/include
+libdir=${exec_prefix}/lib
+
+Name: tlx
+Description: tlx
+URL: http://panthema.net/tlx
+Version: 0.6.1
+Cflags: -I${includedir} Additional compiler flags for TLX
+Libs: -L${libdir} -ltlx 
