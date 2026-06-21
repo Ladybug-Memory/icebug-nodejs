@@ -361,6 +361,50 @@ export function readEdgeList(
   commentPrefix?: string,
 ): Graph;
 
+// ── Global control (mirror networkit.setNumberOfThreads / setSeed) ───────────
+
+/**
+ * Set the number of OpenMP threads that the next parallel region will use.
+ * Observe the effect via `getMaxNumberOfThreads`.
+ * Mirrors `networkit.setNumberOfThreads`.
+ */
+export function setNumberOfThreads(n: number): void;
+
+/**
+ * Thread count the next parallel region will use — i.e. the value last set by
+ * `setNumberOfThreads`, or the OpenMP hardware default before any such call.
+ * Mirrors `networkit.getMaxNumberOfThreads`.
+ */
+export function getMaxNumberOfThreads(): number;
+
+/**
+ * Number of threads in the *current* OpenMP parallel region.  This is
+ * `omp_get_num_threads`, so it returns 1 when called from JS (outside any
+ * parallel region).  Use `getMaxNumberOfThreads` to read the configured count.
+ * Mirrors `networkit.getCurrentNumberOfThreads`.
+ */
+export function getCurrentNumberOfThreads(): number;
+
+/**
+ * Seed NetworKit's global RNG.
+ *
+ * @param seed        The seed value.
+ * @param useThreadId When true, additionally mix the per-thread id into the
+ *                    seed so each thread gets a distinct stream.  This is the
+ *                    source ParallelLeiden's `randomize` step draws from.
+ *                    Defaults to false.
+ * Mirrors `networkit.setSeed`.
+ */
+export function setSeed(seed: number | bigint, useThreadId?: boolean): void;
+
+/**
+ * Returns the high-quality random seed currently in use.
+ *
+ * Returned as a BigInt because the underlying value is a uint64_t and may
+ * exceed 2^53.
+ */
+export function getSeed(): bigint;
+
 // ── JS helpers ────────────────────────────────────────────────────────────────
 
 /**
