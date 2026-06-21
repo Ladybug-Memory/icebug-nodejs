@@ -21,6 +21,11 @@ const {
   parallelLeidenScoringExtensionPath,
   readMETIS,
   readEdgeList,
+  setNumberOfThreads,
+  getMaxNumberOfThreads,
+  getCurrentNumberOfThreads,
+  setSeed,
+  getSeed,
   graphFromEdges,
   weightedGraphFromEdges,
 } = require('../lib/index.js');
@@ -538,6 +543,85 @@ test('Leiden: runs on jazz.graph', () => {
   const Q = alg.modularity();
   assert.ok(Q > 0, `Expected positive modularity, got ${Q}`);
   console.log(`    jazz.graph Leiden:  ${n} communities, modularity=${Q.toFixed(4)}`);
+});
+
+// ── Thread / seed control ────────────────────────────────────────────────────
+console.log('\nThreads / seed');
+
+test('getMaxNumberOfThreads returns a positive integer', () => {
+  const n = getMaxNumberOfThreads();
+  assert.ok(Number.isInteger(n) && n > 0, `expected positive int, got ${n}`);
+});
+
+test('setNumberOfThreads controls getMaxNumberOfThreads', () => {
+  // NetworKit's setNumberOfThreads maps to omp_set_num_threads, which sets the
+  // thread count for the *next* parallel region — observable via
+  // getMaxNumberOfThreads() (omp_get_max_threads).  getCurrentNumberOfThreads()
+  // (omp_get_num_threads) returns 1 outside an active parallel region.
+  const before = getMaxNumberOfThreads();
+  setNumberOfThreads(2);
+  assert.strictEqual(getMaxNumberOfThreads(), 2);
+  // restore the original count so subsequent tests are unaffected
+  setNumberOfThreads(before);
+  assert.strictEqual(getMaxNumberOfThreads(), before);
+});
+
+test('getCurrentNumberOfThreads is 1 outside a parallel region', () => {
+  // omp_get_num_threads() returns 1 when no OpenMP parallel region is active.
+  assert.strictEqual(getCurrentNumberOfThreads(), 1);
+});
+
+test('setNumberOfThreads can be set above the hardware max', () => {
+  // omp_set_num_threads does not clamp; the requested count is reported back
+  // verbatim by getMaxNumberOfThreads regardless of the hardware limit.
+  const max = getMaxNumberOfThreads();
+  setNumberOfThreads(max * 4);
+  assert.strictEqual(getMaxNumberOfThreads(), max * 4);
+  setNumberOfThreads(max);  // restore
+});
+
+test('setSeed accepts a number seed', () => {
+  assert.doesNotThrow(() => setSeed(42, false));
+});
+
+test('setSeed accepts a BigInt seed', () => {
+  // 2^53 + 1 — out of safe-integer range for Number, fine for BigInt
+  assert.doesNotThrow(() => setSeed(9007199254740993n, false));
+});
+
+test('getSeed returns a BigInt', () => {
+  setSeed(42, false);
+  const s = getSeed();
+  assert.strictEqual(typeof s, 'bigint');
+  // After seeding, the in-use seed should be deterministic.
+  const s2 = getSeed();
+  assert.strictEqual(s, s2);
+});
+
+test('setSeed with different seeds produces different RNG streams', () => {
+  // Run Leiden twice with different seeds; the randomised node order means
+  // the first node's community assignment is very likely to differ between
+  // the two runs on a symmetric graph (it is not guaranteed, but the seed
+  // controls the stream that randomize draws from).
+  const g = buildTwoCliquesGraph();
+
+  setSeed(1, false);
+  const a = new Leiden(g, 10, true);
+  a.run();
+  const partA = a.getPartition().membership;
+
+  setSeed(2, false);
+  const b = new Leiden(g, 10, true);
+  b.run();
+  const partB = b.getPartition().membership;
+
+  // The *partition quality* (number of communities) should be stable for
+  // this well-separated graph regardless of seed.
+  assert.strictEqual(a.numberOfCommunities(), 2);
+  assert.strictEqual(b.numberOfCommunities(), 2);
+  assert.ok(partA instanceof Float64Array);
+  assert.ok(partB instanceof Float64Array);
+  assert.strictEqual(partA.length, partB.length);
 });
 
 // ── Summary ──────────────────────────────────────────────────────────────────

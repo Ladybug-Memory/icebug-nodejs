@@ -14,6 +14,13 @@
  * Exposed JS functions:
  *   readMETIS(path)                             → Graph
  *   readEdgeList(path, sep, firstNode, directed, commentPrefix) → Graph
+ *
+ * Global control (mirror networkit.setNumberOfThreads / setSeed):
+ *   setNumberOfThreads(n)
+ *   getMaxNumberOfThreads()
+ *   getCurrentNumberOfThreads()
+ *   setSeed(seed [, useThreadId])
+ *   getSeed()
  */
 
 #include <napi.h>
@@ -30,6 +37,8 @@
 #include <networkit/structures/Partition.hpp>
 #include <networkit/io/EdgeListReader.hpp>
 #include <networkit/io/METISGraphReader.hpp>
+#include <networkit/auxiliary/Parallelism.hpp>
+#include <networkit/auxiliary/Random.hpp>
 
 #include <map>
 #include <memory>
@@ -1254,6 +1263,122 @@ static Napi::Value ReadEdgeList(const Napi::CallbackInfo &info) {
 }
 
 // ============================================================================
+// Free functions: global thread / seed control
+//
+// These mirror the top-level networkit.* helpers in the Python bindings:
+//   nk.setNumberOfThreads(n)
+//   nk.getMaxNumberOfThreads()
+//   nk.getCurrentNumberOfThreads()
+//   nk.setSeed(seed, useThreadId)
+// ============================================================================
+
+/**
+ * JS: setNumberOfThreads(n)
+ *
+ * Sets the number of OpenMP threads that the next parallel region will use
+ * (maps to omp_set_num_threads via Aux::setNumberOfThreads).  Observe the
+ * effect via getMaxNumberOfThreads().
+ */
+static Napi::Value SetNumberOfThreads(const Napi::CallbackInfo &info) {
+    if (info.Length() < 1) {
+        Napi::TypeError::New(info.Env(), "setNumberOfThreads(n)")
+            .ThrowAsJavaScriptException();
+        return info.Env().Undefined();
+    }
+    try {
+        int n = static_cast<int>(info[0].As<Napi::Number>().Int32Value());
+        Aux::setNumberOfThreads(n);
+    } catch (const std::exception &e) {
+        throwError(info.Env(), e);
+    }
+    return info.Env().Undefined();
+}
+
+/**
+ * JS: getMaxNumberOfThreads() → number
+ *
+ * Returns the thread count the next parallel region will use — i.e. the value
+ * last set by setNumberOfThreads, or the OpenMP hardware default before any
+ * such call (maps to omp_get_max_threads via Aux::getMaxNumberOfThreads).
+ */
+static Napi::Value GetMaxNumberOfThreads(const Napi::CallbackInfo &info) {
+    try {
+        return Napi::Number::New(info.Env(),
+            static_cast<double>(Aux::getMaxNumberOfThreads()));
+    } catch (const std::exception &e) {
+        throwError(info.Env(), e);
+        return info.Env().Undefined();
+    }
+}
+
+/**
+ * JS: getCurrentNumberOfThreads() → number
+ *
+ * Returns the number of threads executing the *current* OpenMP parallel region.
+ * This is omp_get_num_threads, so it returns 1 when called from JS (outside any
+ * parallel region).  Use getMaxNumberOfThreads() to read the configured count.
+ */
+static Napi::Value GetCurrentNumberOfThreads(const Napi::CallbackInfo &info) {
+    try {
+        return Napi::Number::New(info.Env(),
+            static_cast<double>(Aux::getCurrentNumberOfThreads()));
+    } catch (const std::exception &e) {
+        throwError(info.Env(), e);
+        return info.Env().Undefined();
+    }
+}
+
+/**
+ * JS: setSeed(seed [, useThreadId=false])
+ *
+ * Seeds NetworKit's global RNG. The second argument, when true, additionally
+ * mixes the per-thread id into the seed so each thread sees a distinct stream
+ * (this is what ParallelLeiden's randomize step draws from).
+ */
+static Napi::Value SetSeed(const Napi::CallbackInfo &info) {
+    if (info.Length() < 1) {
+        Napi::TypeError::New(info.Env(), "setSeed(seed [, useThreadId])")
+            .ThrowAsJavaScriptException();
+        return info.Env().Undefined();
+    }
+    try {
+        uint64_t seed = 0;
+        if (info[0].IsNumber()) {
+            seed = static_cast<uint64_t>(info[0].As<Napi::Number>().Int64Value());
+        } else if (info[0].IsBigInt()) {
+            bool lossless = true;
+            seed = info[0].As<Napi::BigInt>().Uint64Value(&lossless);
+        } else {
+            Napi::TypeError::New(info.Env(),
+                "setSeed: seed must be a number or BigInt")
+                .ThrowAsJavaScriptException();
+            return info.Env().Undefined();
+        }
+        bool useThreadId = info.Length() >= 2 && info[1].As<Napi::Boolean>();
+        Aux::Random::setSeed(seed, useThreadId);
+    } catch (const std::exception &e) {
+        throwError(info.Env(), e);
+    }
+    return info.Env().Undefined();
+}
+
+/**
+ * JS: getSeed() → BigInt
+ *
+ * Returns the high-quality random seed currently in use.  Mirrors
+ * Aux::Random::getSeed(); returned as a BigInt because the seed is a uint64_t
+ * and may exceed 2^53.
+ */
+static Napi::Value GetSeed(const Napi::CallbackInfo &info) {
+    try {
+        return Napi::BigInt::New(info.Env(), Aux::Random::getSeed());
+    } catch (const std::exception &e) {
+        throwError(info.Env(), e);
+        return info.Env().Undefined();
+    }
+}
+
+// ============================================================================
 // Module entry point
 // ============================================================================
 static Napi::Object InitModule(Napi::Env env, Napi::Object exports) {
@@ -1271,6 +1396,13 @@ static Napi::Object InitModule(Napi::Env env, Napi::Object exports) {
 
     exports.Set("readMETIS",    Napi::Function::New(env, ReadMETIS));
     exports.Set("readEdgeList", Napi::Function::New(env, ReadEdgeList));
+
+    // Global thread / RNG control (mirror networkit.setNumberOfThreads / setSeed)
+    exports.Set("setNumberOfThreads",     Napi::Function::New(env, SetNumberOfThreads));
+    exports.Set("getMaxNumberOfThreads",  Napi::Function::New(env, GetMaxNumberOfThreads));
+    exports.Set("getCurrentNumberOfThreads", Napi::Function::New(env, GetCurrentNumberOfThreads));
+    exports.Set("setSeed", Napi::Function::New(env, SetSeed));
+    exports.Set("getSeed", Napi::Function::New(env, GetSeed));
 
     return exports;
 }
