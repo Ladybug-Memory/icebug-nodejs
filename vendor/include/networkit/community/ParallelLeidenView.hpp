@@ -14,8 +14,8 @@
 #include <limits>
 #include <memory>
 #include <mutex>
-#include <string>
 #include <omp.h>
+#include <string>
 #include <thread>
 #include <tlx/unused.hpp>
 #include <networkit/Globals.hpp>
@@ -93,6 +93,9 @@ private:
 
     template <typename GraphType>
     Partition parallelRefine(const GraphType &graph);
+
+    template <typename GraphType>
+    Partition parallelRefine(const GraphType &graph, bool &refineMadeChanges);
 
     static count nodeSize(const Graph &graph, node u);
 
@@ -204,6 +207,9 @@ private:
 
     // Maximum inner iterations per Leiden iteration.
     int maxInnerIterations = 20;
+
+    // Maximum moves per node within a Leiden iteration.
+    int maxMovesPerNode = 20;
 
     // Optional convergence stop: minimum relative reduction in community count per inner iter.
     // 0.0 disables this criterion.

@@ -6,7 +6,7 @@ set -euo pipefail
 
 REPO="Ladybug-Memory/icebug"
 VENDOR_DIR="$(cd "$(dirname "$0")/.." && pwd)/vendor"
-DEFAULT_TAG="12.8"
+DEFAULT_TAG="13.0"
 
 # ---------------------------------------------------------------------------
 # Resolve version tag

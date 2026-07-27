@@ -527,8 +527,8 @@ private:
                                   typename Aux::FunctionTraits<F>::template arg<2>::type>::value
                   && std::is_same<edgeid, typename Aux::FunctionTraits<F>::template arg<3>::type>::
                       value>::type * = (void *)0>
-    auto edgeLambda(F &f, node u, node v, edgeweight ew, edgeid id) const
-        -> decltype(f(u, v, ew, id)) {
+    auto edgeLambda(F &f, node u, node v, edgeweight ew,
+                    edgeid id) const -> decltype(f(u, v, ew, id)) {
         return f(u, v, ew, id);
     }
 
@@ -560,8 +560,8 @@ private:
                   (Aux::FunctionTraits<F>::arity >= 2)
                   && std::is_same<edgeweight, typename Aux::FunctionTraits<F>::template arg<
                                                   2>::type>::value>::type * = (void *)0>
-    auto edgeLambda(F &f, node u, node v, edgeweight ew, edgeid /*id*/) const
-        -> decltype(f(u, v, ew)) {
+    auto edgeLambda(F &f, node u, node v, edgeweight ew,
+                    edgeid /*id*/) const -> decltype(f(u, v, ew)) {
         return f(u, v, ew);
     }
 
@@ -574,8 +574,8 @@ private:
                            (Aux::FunctionTraits<F>::arity >= 1)
                            && std::is_same<node, typename Aux::FunctionTraits<F>::template arg<
                                                      1>::type>::value>::type * = (void *)0>
-    auto edgeLambda(F &f, node u, node v, edgeweight /*ew*/, edgeid /*id*/) const
-        -> decltype(f(u, v)) {
+    auto edgeLambda(F &f, node u, node v, edgeweight /*ew*/,
+                    edgeid /*id*/) const -> decltype(f(u, v)) {
         return f(u, v);
     }
 
@@ -651,7 +651,7 @@ public:
     public:
         NeighborRange(const Graph &G, node u)
             : neighborBuffer(
-                std::make_shared<std::vector<node>>(G.getNeighborsVector(u, InEdges))) {}
+                  std::make_shared<std::vector<node>>(G.getNeighborsVector(u, InEdges))) {}
         NeighborRange() : neighborBuffer(std::make_shared<std::vector<node>>()) {}
 
         NeighborIterator begin() const { return NeighborIterator(neighborBuffer->begin()); }
@@ -735,21 +735,6 @@ public:
      * @param[in] edges list of weighted edges
      */
     Graph(std::initializer_list<WeightedEdge> edges);
-
-    /**
-     * Create a graph from CSR arrays for memory-efficient storage.
-     *
-     * @param n Number of nodes.
-     * @param directed If set to @c true, the graph will be directed.
-     * @param outIndices CSR indices array containing neighbor node IDs for outgoing edges
-     * @param outIndptr CSR indptr array containing offsets into outIndices for each node
-     * @param inIndices CSR indices array containing neighbor node IDs for incoming edges (directed
-     * only)
-     * @param inIndptr CSR indptr array containing offsets into inIndices for each node (directed
-     * only)
-     */
-    Graph(count n, bool directed, std::vector<node> outIndices, std::vector<index> outIndptr,
-          std::vector<node> inIndices = {}, std::vector<index> inIndptr = {});
 
     /**
      * Create a graph as copy of @a other.
