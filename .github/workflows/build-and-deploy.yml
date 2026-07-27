@@ -179,7 +179,7 @@ jobs:
 
       # Trusted publishing needs recent npm version
       - name: Upgrade npm
-        run: npm install -g npm@latest
+        run: npm install -g npm@11
 
       - name: Publish to npm
         run: npm publish --provenance --access public
